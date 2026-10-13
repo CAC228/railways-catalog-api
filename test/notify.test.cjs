@@ -7,7 +7,7 @@ const { NotifyService } = require('../dist/src/notify/notify.service');
 const { OrderService } = require('../dist/src/order/order.service');
 const { RequestService } = require('../dist/src/request/request.service');
 
-const SITE = 'https://traer.ru';
+const SITE = 'https://prorelsa.ru';
 
 const order = {
   orderNumber: 'ORD-2026-00012',
@@ -32,17 +32,17 @@ const request = {
   service: null,
 };
 
-// Пользователь раскладывает письма сайта фильтром «Тема содержит [Сайт traer.ru]»,
+// Пользователь раскладывает письма сайта фильтром «Тема содержит [Сайт prorelsa.ru]» (до 13.10.2026 — [Сайт traer.ru]),
 // а свои письма самому себе — нет. Метка в теме — это договорённость, её не менять.
 test('every letter subject starts with the filter tag', () => {
-  assert.equal(SUBJECT_TAG, '[Сайт traer.ru]');
+  assert.equal(SUBJECT_TAG, '[Сайт prorelsa.ru]');
   assert.ok(orderLetter(order, SITE).subject.startsWith(`${SUBJECT_TAG} `));
   assert.ok(requestLetter(request, SITE, []).subject.startsWith(`${SUBJECT_TAG} `));
 });
 
 test('order letter names the order, the client and every item', () => {
   const letter = orderLetter(order, SITE);
-  assert.equal(letter.subject, '[Сайт traer.ru] Заказ № ORD-2026-00012 — Иван Иванов, +7 (843) 259-73-00');
+  assert.equal(letter.subject, '[Сайт prorelsa.ru] Заказ № ORD-2026-00012 — Иван Иванов, +7 (843) 259-73-00');
   for (const part of ['Иван Иванов', '+7 (843) 259-73-00', 'ivan@example.ru', 'Казань, ул. Путейская, 1', 'Нужна доставка до станции', 'Болт закладной М22х175 в сборе', 'SKU1', 'Рельс Р65', 'SKU3']) {
     assert.ok(letter.text.includes(part), `в тексте нет «${part}»`);
     assert.ok(letter.html.includes(part), `в html нет «${part}»`);
@@ -60,16 +60,16 @@ test('order without any price says the total is on request', () => {
 
 test('request letter names the product or service it came from', () => {
   const byProduct = requestLetter(request, SITE, []);
-  assert.equal(byProduct.subject, '[Сайт traer.ru] Заявка: Накладка Р65 двухголовая — Пётр Петров, +7 (965) 615-50-59');
+  assert.equal(byProduct.subject, '[Сайт prorelsa.ru] Заявка: Накладка Р65 двухголовая — Пётр Петров, +7 (965) 615-50-59');
   assert.ok(byProduct.text.includes('Перезвоните после обеда'));
   assert.ok(byProduct.text.includes(`${SITE}/admin/requests`));
   assert.equal(byProduct.replyTo, undefined);
 
   const byService = requestLetter({ ...request, product: null, service: { title: 'Укладка пути' } }, SITE, []);
-  assert.equal(byService.subject, '[Сайт traer.ru] Заявка: Укладка пути — Пётр Петров, +7 (965) 615-50-59');
+  assert.equal(byService.subject, '[Сайт prorelsa.ru] Заявка: Укладка пути — Пётр Петров, +7 (965) 615-50-59');
 
   const plain = requestLetter({ ...request, product: null }, SITE, []);
-  assert.equal(plain.subject, '[Сайт traer.ru] Заявка — Пётр Петров, +7 (965) 615-50-59');
+  assert.equal(plain.subject, '[Сайт prorelsa.ru] Заявка — Пётр Петров, +7 (965) 615-50-59');
 });
 
 test('files the client attached travel with the request letter', () => {
@@ -95,8 +95,8 @@ function transportThat(sendMail) {
 function notifyWith(transport) {
   const service = new NotifyService();
   service.transport = transport;
-  service.from = { name: 'Сайт traer.ru', address: 'zakaz@traer.ru' };
-  service.to = 'zakaz@traer.ru';
+  service.from = { name: 'Сайт prorelsa.ru', address: 'zakaz@prorelsa.ru' };
+  service.to = 'zakaz@prorelsa.ru';
   service.siteUrl = SITE;
   return service;
 }
@@ -105,8 +105,8 @@ test('letters go from the site mailbox to itself, signed as the site', async () 
   const { sent, transport } = transportThat();
   await notifyWith(transport).orderCreated(order);
   assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].from, { name: 'Сайт traer.ru', address: 'zakaz@traer.ru' });
-  assert.equal(sent[0].to, 'zakaz@traer.ru');
+  assert.deepEqual(sent[0].from, { name: 'Сайт prorelsa.ru', address: 'zakaz@prorelsa.ru' });
+  assert.equal(sent[0].to, 'zakaz@prorelsa.ru');
   assert.equal(sent[0].replyTo, 'ivan@example.ru');
   assert.ok(sent[0].subject.startsWith(SUBJECT_TAG));
 });

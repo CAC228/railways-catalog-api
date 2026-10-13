@@ -2,7 +2,7 @@
 
 // По этой метке пользователь раскладывает письма сайта фильтром в папку,
 // а свои письма самому себе — нет. Менять только вместе с фильтром в почте.
-export const SUBJECT_TAG = '[Сайт traer.ru]';
+export const SUBJECT_TAG = '[Сайт prorelsa.ru]';
 
 export interface LetterFile {
   filename: string;

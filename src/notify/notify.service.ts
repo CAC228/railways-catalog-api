@@ -10,7 +10,7 @@ import {
   requestLetter,
 } from './notify-letters';
 
-const SENDER_NAME = 'Сайт traer.ru';
+const SENDER_NAME = 'Сайт prorelsa.ru';
 
 // Письмо о новом заказе или заявке на почту менеджера.
 // Отправка никогда не отклоняет обещание и не бросает: заказ уже сохранён в базе,
