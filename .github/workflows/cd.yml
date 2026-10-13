@@ -49,7 +49,15 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # По умолчанию ssh-action обрывает команду через 10 минут. 13.10.2026 загрузка
+          # образа с GHCR на сервер шла дольше, выкатка упала, а API остался на старой сборке.
+          command_timeout: 30m
           script: |
+            set -e
             cd ${{ secrets.DEPLOY_PATH }}
-            docker compose pull
-            docker compose up -d
+            # Тянем и перезапускаем только API. Раньше здесь стояли `docker compose pull`
+            # и `up -d` без имени сервиса: заодно тянулись образы сайта, лэнда и postgres,
+            # а контейнеры соседей пересоздавались. `set -e` роняет выкатку при сбое загрузки,
+            # чтобы шаг не рапортовал успех со старой сборкой.
+            docker compose pull api
+            docker compose up -d --no-deps api
