@@ -18,6 +18,19 @@ export function getSiteUrl(): string {
   return url.origin;
 }
 
+// Разделы и категории каталога — ЧПУ, как canonical сайта: /catalog/<раздел>/<категория>.
+export function catalogPath(
+  categorySlug: string,
+  subcategorySlug?: string,
+): string {
+  return (
+    '/catalog/' +
+    [categorySlug, ...(subcategorySlug ? [subcategorySlug] : [])]
+      .map(encodeURIComponent)
+      .join('/')
+  );
+}
+
 export function productPath(product: {
   slug: string;
   category: { slug: string };

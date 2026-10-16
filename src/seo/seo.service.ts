@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
-import { escapeXml, getSiteUrl, productPath } from './site-url';
+import { catalogPath, escapeXml, getSiteUrl, productPath } from './site-url';
 
 const CHUNK_SIZE = 45000;
 const NS = 'http://www.sitemaps.org/schemas/sitemap/0.9';
@@ -72,7 +72,7 @@ export class SeoService {
       if (product.subcategory)
         touch(
           subcategoryUpdatedAt,
-          product.subcategory.slug,
+          catalogPath(product.category.slug, product.subcategory.slug),
           product.updatedAt,
         );
     }
@@ -83,17 +83,19 @@ export class SeoService {
         path,
         updatedAt: path === '/services' ? servicesUpdatedAt : siteUpdatedAt,
       })),
-      // Порядок параметров совпадает с canonical сайта: category, затем subcategory.
+      // Дерево каталога в ЧПУ, как canonical сайта. Старые /catalog?category=… сайт переводит сюда 301 — в карту их не отдаём.
       ...categories.flatMap((category) => [
         {
-          path: `/catalog?${new URLSearchParams({ category: category.slug })}`,
+          path: catalogPath(category.slug),
           updatedAt: categoryUpdatedAt.get(category.slug) ?? siteUpdatedAt,
         },
-        ...category.subcategories.map((subcategory) => ({
-          path: `/catalog?${new URLSearchParams({ category: category.slug, subcategory: subcategory.slug })}`,
-          updatedAt:
-            subcategoryUpdatedAt.get(subcategory.slug) ?? siteUpdatedAt,
-        })),
+        ...category.subcategories.map((subcategory) => {
+          const path = catalogPath(category.slug, subcategory.slug);
+          return {
+            path,
+            updatedAt: subcategoryUpdatedAt.get(path) ?? siteUpdatedAt,
+          };
+        }),
       ]),
       ...products.map((product) => ({
         path: productPath(product),
@@ -140,8 +142,9 @@ export class SeoService {
     );
   }
 
-  // Clean-param понимает Яндекс: адреса с метками рекламы склеиваются с чистыми. category и subcategory
-  // сюда не добавлять — на них держатся страницы каталога.
+  // Clean-param понимает Яндекс: адреса с метками рекламы и с поиском/фильтрами/сортировкой каталога склеиваются
+  // с чистыми (на сайте у таких вариантов noindex и canonical на раздел). page не добавлять — у страниц свой canonical;
+  // category и subcategory тоже — старые /catalog?category=… Яндекс должен пройти и увидеть 301 на ЧПУ.
   robots(): string {
     return [
       'User-agent: *',
@@ -149,6 +152,7 @@ export class SeoService {
       'Disallow: /admin',
       'Disallow: /cart',
       'Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&gclid&from',
+      'Clean-param: search&gost&priceMin&priceMax&condition&stock&sort&limit /catalog',
       '',
       `Sitemap: ${this.origin}/sitemap.xml`,
       '',
