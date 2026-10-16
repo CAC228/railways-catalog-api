@@ -34,7 +34,7 @@ test('sitemap includes database products and services with real update dates, ex
   assert.equal((xml.match(/<lastmod>/g) || []).length, (xml.match(/<url>/g) || []).length, 'lastmod у каждого адреса');
   assert.match(seo.robots(), /Sitemap: https:\/\/catalog\.example\/sitemap.xml/);
 });
-test('sitemap lists subcategory pages with the same query order as the site canonical', async () => {
+test('sitemap lists the catalog tree on static addresses, as the site canonical', async () => {
   let query;
   const seo = new SeoService({
     product: { findMany: async () => [] },
@@ -42,10 +42,11 @@ test('sitemap lists subcategory pages with the same query order as the site cano
     category: { findMany: async (args) => { query = args; return [{ slug: 'rails', subcategories: [{ slug: 'r-65' }, { slug: 'узкая' }] }, { slug: 'bolts', subcategories: [] }]; } },
   });
   const xml = await seo.sitemap();
-  assert.match(xml, /<loc>https:\/\/catalog\.example\/catalog\?category=rails<\/loc>/);
-  assert.match(xml, /<loc>https:\/\/catalog\.example\/catalog\?category=rails&amp;subcategory=r-65<\/loc>/);
-  assert.ok(xml.includes('category=rails&amp;subcategory=%D1%83%D0%B7%D0%BA%D0%B0%D1%8F'));
-  assert.equal((xml.match(/subcategory=/g) || []).length, 2);
+  assert.ok(xml.includes('<loc>https://catalog.example/catalog/rails</loc>'));
+  assert.ok(xml.includes('<loc>https://catalog.example/catalog/rails/r-65</loc>'));
+  assert.ok(xml.includes('<loc>https://catalog.example/catalog/rails/%D1%83%D0%B7%D0%BA%D0%B0%D1%8F</loc>'));
+  assert.ok(xml.includes('<loc>https://catalog.example/catalog/bolts</loc>'));
+  assert.ok(!/<loc>[^<]*[?=]/.test(xml), 'в карте нет адресов с параметрами');
   assert.deepEqual(query.select.subcategories.where, { products: { some: {} } }, 'empty subcategories stay out of the sitemap');
 });
 test('large catalogs split into valid sitemap chunks', async () => {
@@ -80,11 +81,11 @@ test('every sitemap address has lastmod: categories take their newest product, p
     const start = xml.indexOf(loc);
     return start < 0 ? undefined : xml.slice(start + loc.length, xml.indexOf('</lastmod>', start));
   };
-  assert.equal(lastmod('/catalog?category=rails'), day(20).toISOString());
-  assert.equal(lastmod('/catalog?category=rails&subcategory=r-65'), day(10).toISOString());
-  assert.equal(lastmod('/catalog?category=rails&subcategory=r-50'), day(20).toISOString());
-  assert.equal(lastmod('/catalog?category=bolts'), day(12).toISOString());
-  assert.equal(lastmod('/catalog?category=empty'), day(25).toISOString(), 'пустой раздел — дата последнего изменения каталога');
+  assert.equal(lastmod('/catalog/rails'), day(20).toISOString());
+  assert.equal(lastmod('/catalog/rails/r-65'), day(10).toISOString());
+  assert.equal(lastmod('/catalog/rails/r-50'), day(20).toISOString());
+  assert.equal(lastmod('/catalog/bolts'), day(12).toISOString());
+  assert.equal(lastmod('/catalog/empty'), day(25).toISOString(), 'пустой раздел — дата последнего изменения каталога');
   assert.equal(lastmod('/services'), day(25).toISOString());
   for (const path of ['/', '/catalog', '/about', '/contacts', '/delivery', '/calculator', '/privacy'])
     assert.equal(lastmod(path), day(25).toISOString(), path);
@@ -95,6 +96,21 @@ test('robots.txt closes the cart and tells Yandex to ignore tracking parameters,
   assert.ok(robots.includes('Disallow: /admin\n'));
   assert.ok(robots.includes('Disallow: /cart\n'));
   assert.ok(robots.includes('Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&yclid&gclid&from\n'));
-  assert.ok(!/category|subcategory/.test(robots), 'на category/subcategory держится каталог');
+  assert.ok(robots.includes('Clean-param: search&gost&priceMin&priceMax&condition&stock&sort&limit /catalog\n'));
+  assert.ok(!/category|subcategory|page/.test(robots), 'старые адреса разделов должны дойти до 301, страницы — до своего canonical');
   assert.match(robots, /Sitemap: https:\/\/catalog\.example\/sitemap.xml\n$/);
+});
+test('a category name repeated in two sections gets the date of its own products', async () => {
+  const day = (value) => new Date(`2026-09-${value}T10:00:00Z`);
+  const seo = new SeoService({
+    product: { findMany: async () => [
+      { slug: 'a', category: { slug: 'rails' }, subcategory: { slug: 'new' }, updatedAt: day(10) },
+      { slug: 'b', category: { slug: 'bolts' }, subcategory: { slug: 'new' }, updatedAt: day(20) },
+    ] },
+    service: { findMany: async () => [] },
+    category: { findMany: async () => [{ slug: 'rails', subcategories: [{ slug: 'new' }] }, { slug: 'bolts', subcategories: [{ slug: 'new' }] }] },
+  });
+  const xml = await seo.sitemap();
+  assert.ok(xml.includes(`<loc>https://catalog.example/catalog/rails/new</loc><lastmod>${day(10).toISOString()}</lastmod>`));
+  assert.ok(xml.includes(`<loc>https://catalog.example/catalog/bolts/new</loc><lastmod>${day(20).toISOString()}</lastmod>`));
 });
