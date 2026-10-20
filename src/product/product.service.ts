@@ -168,15 +168,23 @@ export class ProductService {
       where.subcategory = { slug: query.subcategorySlug };
     }
 
-    if (query.search) {
-      const search = query.search.trim();
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-        { gost: { contains: search, mode: 'insensitive' } },
-        { descriptionTags: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    // Каждое слово запроса ищется отдельно и где угодно — в названии, артикуле, ГОСТе или словах для поиска:
+    // «рельс р18» находит «Узкоколейные рельсы Р-18», если «р18» вписано в descriptionTags.
+    const searchWords = (query.search ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 10);
+    const searchClauses: Prisma.ProductWhereInput[] = searchWords.map(
+      (word) => ({
+        OR: [
+          { title: { contains: word, mode: 'insensitive' } },
+          { sku: { contains: word, mode: 'insensitive' } },
+          { gost: { contains: word, mode: 'insensitive' } },
+          { descriptionTags: { contains: word, mode: 'insensitive' } },
+        ],
+      }),
+    );
 
     if (query.condition) {
       where.condition = query.condition.toUpperCase() as ProductCondition;
@@ -194,15 +202,19 @@ export class ProductService {
       ([, value]) => value && value !== 'all',
     );
 
-    if (attributeEntries.length > 0) {
-      where.AND = attributeEntries.map(([key, value]) => ({
+    const attributeClauses: Prisma.ProductWhereInput[] = attributeEntries.map(
+      ([key, value]) => ({
         specs: {
           some: {
             id: key,
             value: String(value),
           },
         },
-      }));
+      }),
+    );
+
+    if (searchClauses.length + attributeClauses.length > 0) {
+      where.AND = [...searchClauses, ...attributeClauses];
     }
 
     return where;
