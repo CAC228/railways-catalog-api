@@ -81,17 +81,31 @@ test('real WebSocket conversations: authorization, delivery, retry, history, rec
   notify.logger = { error() {}, warn() {}, log() {} };
   notify.to = 'local-test@example.invalid'; notify.from = { name: 'Test', address: 'test@example.invalid' }; notify.siteUrl = FRONT;
   notify.transport = { async sendMail() { throw Error('SMTP temporarily unavailable'); } };
-  const worker = new ChatNotifications(db, notify);
+  // Keep the real database/worker, but scope its queue to this test's conversation.
+  // Browser smoke tests can leave pending messages in the shared local test database.
+  const mailDb = { chatMessage: {
+    findMany: args => db.chatMessage.findMany({ ...args, where: { AND: [args.where, { conversationId: a.conversation.id }] } }),
+    updateMany: args => db.chatMessage.updateMany(args),
+    update: args => db.chatMessage.update(args),
+  } };
+  const unrelated = await db.chatMessage.create({ data: {
+    conversationId: b.conversation.id, sender: 'VISITOR', clientId: randomUUID(),
+    body: 'An unrelated pending notification must remain untouched', notificationDueAt: new Date(0),
+  } });
+  const worker = new ChatNotifications(mailDb, notify);
   await worker.flush();
   let stored = await db.chatMessage.findUnique({ where: { id: sent.data.id } });
   assert.equal(stored.notificationSentAt, null); assert.equal(stored.notificationTries, 1); assert.ok(stored.notificationDueAt > new Date());
   await db.chatMessage.updateMany({ where: { conversationId: a.conversation.id, sender: 'VISITOR' }, data: { notificationDueAt: new Date(0) } });
   notify.transport = { async sendMail(message) { delivered.push(message); } };
-  await new ChatNotifications(db, notify).flush();
+  await new ChatNotifications(mailDb, notify).flush();
   stored = await db.chatMessage.findUnique({ where: { id: sent.data.id } });
   assert.ok(stored.notificationSentAt); assert.equal(stored.notificationTries, 2);
   assert.equal(delivered.length, 2); assert.ok(delivered[0].text.includes(`/admin/chats?conversation=${a.conversation.id}`));
   await worker.flush(); assert.equal(delivered.length, 2);
+  const untouched = await db.chatMessage.findUnique({ where: { id: unrelated.id } });
+  assert.equal(untouched.notificationTries, 0); assert.equal(untouched.notificationSentAt, null);
+  await db.chatMessage.delete({ where: { id: unrelated.id } });
   assert.equal((await db.chatMessage.findUnique({ where: { id: reply.data.id } })).notificationDueAt, null);
   await db.chatMessage.createMany({ data: Array.from({ length: 55 }, (_, index) => ({ conversationId: b.conversation.id, sender: 'MANAGER', clientId: randomUUID(), body: `История ${index}` })) });
   const newest = await call(other, 'chat:history', { conversationId: b.conversation.id });
