@@ -10,7 +10,7 @@ const { ChatNotifications } = require('../dist/src/chat/chat.notifications');
 const { ChatLimiter } = require('../dist/src/chat/chat-validation');
 
 const API = process.env.CHAT_TEST_API_URL || 'http://127.0.0.1:4191';
-const FRONT = process.env.CHAT_TEST_FRONTEND_URL || 'http://127.0.0.1:4190';
+const FRONT = process.env.CHAT_TEST_FRONTEND_URL || 'http://127.0.0.1:4173';
 if (![API, FRONT, process.env.DATABASE_URL].every(value => value && new URL(value).hostname === '127.0.0.1') || !new URL(process.env.DATABASE_URL).pathname.endsWith('_test')) throw Error('Use only an isolated loopback test database and servers');
 const db = new PrismaService();
 const sockets = [];
